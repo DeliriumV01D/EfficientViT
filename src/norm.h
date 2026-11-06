@@ -38,7 +38,7 @@ private:
 public:
 	explicit TritonRMSNorm2dImpl(
 		int64_t num_channels,
-		float eps = 1e-8,
+		float eps = 1e-5,
 		bool elementwise_affine = true,
 		bool bias = true
 	) : Eps(eps), ElementwiseAffine(elementwise_affine), bias_(bias)
@@ -63,11 +63,8 @@ public:
 		//Input shape: [N, C, H, W]
 		auto input_dtype = x.dtype();
 
-		//Calculate variance over spatial dimensions (H, W)
-		auto variance = x.to(torch::kFloat32)
-			.pow(2)
-			.mean({ 2, 3 }, /*keepdim=*/true)		// Mean over H, W
-			.mean(1, /*keepdim=*/true);					// Mean over C
+		//RMS over channels per spatial position
+		auto variance = x.to(torch::kFloat32).pow(2).mean({ 1 }, /*keepdim=*/true); // [N,1,H,W]
 
 		//Normalize
 		x = x * torch::rsqrt(variance + Eps);
@@ -102,7 +99,7 @@ public:
 };
 TORCH_MODULE(TritonRMSNorm2d);
 
-std::unordered_map<std::string, std::shared_ptr<torch::nn::Module>> REGISTERED_NORM_DICT;
+extern std::unordered_map<std::string, std::shared_ptr<torch::nn::Module>> REGISTERED_NORM_DICT;
 
 //Initialize registered norms
 inline void register_norms()

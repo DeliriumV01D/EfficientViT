@@ -1,4 +1,4 @@
-cmake_minimum_required(VERSION 3.8)
+cmake_minimum_required(VERSION 4.4)
 
 #project(EfficientViT)
 
@@ -7,17 +7,24 @@ include_directories(${CMAKE_SOURCE_DIR}/src/LibTorchTraining)
 
 set(SOURCES ${SOURCES}
 	src/dc_ae.cpp
+	src/LibTorchTraining/ImageTileProcessor.cpp
+	src/act.cpp
+	src/norm.cpp
+	src/dc_ae_image_tile_processor.cpp
 	src/main.cpp
 )
 
 set(HEADERS ${HEADERS}
 	src/LibTorchTraining/TorchHeader.h
-	src/safetensors.h
+	src/LibTorchTraining/safetensors.h
+	src/LibTorchTraining/cv_torch_utils.h
+	src/LibTorchTraining/ImageTileProcessor.h
 	src/act.h
 	src/norm.h
 	src/network.h
 	src/opt.h
 	src/dc_ae.h
+	src/dc_ae_image_tile_processor.h
 )
 
 set(LIBS ${LIBS}

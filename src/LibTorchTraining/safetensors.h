@@ -243,7 +243,7 @@ namespace safetensors
 		throw SafetensorsException("Unsupported dtype");
 	}
 
-	std::unordered_map<std::string, TensorInfo> parse_safetensors_header_info(const char* data, size_t size)
+	inline std::unordered_map<std::string, TensorInfo> parse_safetensors_header_info(const char* data, size_t size)
 	{
 		if (size < 8)
 			throw SafetensorsException("Invalid file size");

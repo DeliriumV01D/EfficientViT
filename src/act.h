@@ -8,7 +8,7 @@
 #include <functional>
 #include <optional>
 
-std::unordered_map<std::string, std::shared_ptr<torch::nn::Module>> REGISTERED_ACT_DICT;
+extern std::unordered_map<std::string, std::shared_ptr<torch::nn::Module>> REGISTERED_ACT_DICT;
 
 //Initialize registered activation functions
 inline void register_activation_functions()
@@ -21,7 +21,7 @@ inline void register_activation_functions()
 	REGISTERED_ACT_DICT["gelu"] = torch::nn::GELU(torch::nn::GELUOptions().approximate("tanh")).ptr();
 }
 
-// Function to build an activation function
+//Function to build an activation function
 inline std::shared_ptr<torch::nn::Module> build_act(const std::string &name)
 {
 	if (REGISTERED_ACT_DICT.find(name) != REGISTERED_ACT_DICT.end())

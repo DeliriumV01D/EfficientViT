@@ -1,12 +1,13 @@
 #include "TorchHeader.h"
+#include "cv_torch_utils.h"
 
 #include "act.h"
 #include "norm.h"
 #include "opt.h"
 #include "dc_ae.h"
+#include "dc_ae_image_tile_processor.h"
 
 #include <opencv2/imgproc/imgproc.hpp>
-#include <opencv2/imgproc/types_c.h>
 #include <opencv2/highgui/highgui.hpp>
 
 
@@ -230,30 +231,6 @@ void test()
 	//std::cout << std::get<0>(output20) << std::endl;
 }
 
-inline torch::Tensor CVMatToTorchTensor(cv::Mat img, const bool perm = true)
-{
-	if (!img.isContinuous())
-		img = img.clone();
-	auto tensor_image = torch::from_blob(img.data, { img.rows, img.cols, img.channels() }, at::kByte);
-	if (perm)
-		tensor_image = tensor_image.permute({ 2,0,1 });
-	tensor_image.unsqueeze_(0);
-	tensor_image = (tensor_image.toType(c10::kFloat).div(255) - 0.5) / 0.5;
-	return tensor_image;		//tensor_image.clone();
-}
-
-inline cv::Mat TorchTensorToCVMat(const torch::Tensor tensor_image, const bool perm = true)
-{
-	auto t = tensor_image.detach().squeeze(0).cpu();
-	if (perm)
-		t = t.permute({ 1, 2, 0 });
-	t = (t.mul(0.5) + 0.5).mul(255).clamp(0, 255).to(torch::kU8);
-	cv::Mat result_img;
-	t = t.contiguous();
-	cv::Mat(static_cast<int>(t.size(0)), static_cast<int>(t.size(1)), CV_MAKETYPE(CV_8U, t.sizes().size() >= 3 ? static_cast<int>(t.size(2)) : 1), t.data_ptr()).copyTo(result_img);
-	return result_img;
-}
-
 int main(int argc, const char* argv[])
 {
 	torch::manual_seed(42);
@@ -263,9 +240,10 @@ int main(int argc, const char* argv[])
 	try {
 		register_activation_functions();
 		register_norms();
+
 		torch::Device device = torch::kCUDA;
 		std::string name = "dc-ae-f32c32-in-1.0";
-		std::string pretrained_path = "D:/Delirium/PROJECTS/EfficientViT/DCAE/dc-ae-f32c32-in-1.0model.safetensors";
+		std::string pretrained_path = "../DCAE/dc-ae-f32c32-in-1.0model.safetensors";
 		DCAEConfig config = dc_ae_f32c32(name, pretrained_path);
 		//Вывод конфигурации
 		std::cout << "Encoder Latent Channels: " << config.encoder.latent_channels << std::endl;
@@ -274,25 +252,39 @@ int main(int argc, const char* argv[])
 		DCAE dcae(config);
 		dcae->eval();
 		dcae->to(device);
-
-
 		cv::Mat img = cv::imread("../data/1.jpg", cv::IMREAD_COLOR);
 		cv::resize(img, img, cv::Size(512, 512));
-		torch::Tensor input = CVMatToTorchTensor(img);
+		torch::Tensor input = CVMatToTorchTensor(img, true, 2);
 		//torch::Tensor input = torch::randn({ 1, 3, 128, 128 });
 		std::cout << "input: " << input.sizes() << " " << input.mean() << " " << input.std() << std::endl;
-		auto latent = dcae->encode((input* config.scaling_factor.value()).to(device)) /* config.scaling_factor.value()*/;
+		auto latent = dcae->encode((input).to(device)) /* config.scaling_factor.value()*/;
+
+		//torch::Tensor result = torch::zeros({ 1, 32, 8, 8 }, torch::dtype(torch::kFloat32).device(device));
+		//result.index_put_({ 0, torch::indexing::Slice(), torch::indexing::Slice(0, 2), torch::indexing::Slice(0, 2) },
+		//	latent.index({0, torch::indexing::Slice(), torch::indexing::Slice(0, 2), torch::indexing::Slice(0, 2)})
+		//);
+
 		std::cout << /*latent[0] <<*/ "latent: " << latent.sizes() << " " << latent.mean() << " " << latent.std() << std::endl;
-		auto out = dcae->decode(latent)/ config.scaling_factor.value();
+		auto out = dcae->decode(latent)/*/ config.scaling_factor.value()*/;
 		std::cout << "out: " << out.sizes() << " " << out.mean() << " " << out.std() << std::endl;
-		auto img_out = TorchTensorToCVMat(out);
+		auto img_out = TorchTensorToCVMat(out, true, 2);
+
+
+		//DCAEImageTileProcessor dcae_tile_processor("dc-ae-f32c32-in-1.0", "../DCAE/dc-ae-f32c32-in-1.0model.safetensors", torch::kCUDA);
+		//
+		//cv::Mat img = cv::imread("../data/123254.jpg", cv::IMREAD_COLOR);
+		//cv::resize(img, img, cv::Size(16*256, 12*256));
+		//torch::Tensor latents = dcae_tile_processor.Encode(img, 8, cv::Size(256, 256), 3, cv::Size(8, 8), 32, torch::kCUDA, true, 2, false);
+		//std::cout <<"latents.sizes(): "<< latents.sizes() << std::endl;
+		//cv::Mat img_out = dcae_tile_processor.Decode(latents, 8, cv::Size(8, 8), 32, cv::Size(256, 256), 3, torch::kCUDA, true, 2, false);
+		//cv::resize(img_out, img_out, cv::Size(8 * 256, 6 * 256));
+
 		cv::imshow("img", img);
 		cv::imshow("img_out", img_out);
 		cv::imwrite("img_out.jpg", img_out);
-		cv::imwrite("input_out.jpg", TorchTensorToCVMat(input));
 		cv::waitKey(0);
 
-	} catch (const std::exception& e) {
+	} catch (const std::exception &e) {
 		std::cerr << "Error: " << e.what() << std::endl;
 	}
 	
